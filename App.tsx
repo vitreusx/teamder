@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Provider } from "react-redux";
-import { configureStore } from "@reduxjs/toolkit";
+import { configureStore, createAsyncThunk } from "@reduxjs/toolkit";
 import { createAction, createSlice } from "@reduxjs/toolkit";
 import { useSelector } from "react-redux";
 import {
@@ -9,9 +9,13 @@ import {
   createNativeStackNavigator,
 } from "@react-navigation/native-stack";
 import { initializeApp, FirebaseOptions } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 import { View, Text, Button, TextInput } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { LogBox } from "react-native";
+
+LogBox.ignoreLogs(["Setting a timer"]);
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: "AIzaSyDxmqZR7V9TjEcGlaWgtZVvr0zqghDA5_c",
@@ -25,16 +29,33 @@ const firebaseConfig: FirebaseOptions = {
 };
 
 initializeApp(firebaseConfig);
-export const firestore = getFirestore();
+export const db = getFirestore();
 
-const Stack = createNativeStackNavigator();
 interface AuthState {
   username: string | null;
   signedIn: boolean;
 }
 
-const signIn = createAction<string>("signIn");
+const signIn = createAsyncThunk("signIn", async (payload: string, thunkAPI) => {
+  const username = payload;
+  const userDoc = await getDoc(doc(db, "users", username));
+  if (!userDoc.exists()) {
+    throw new Error(`User with an username ${username} not found!`);
+  } else {
+    return username;
+  }
+});
+
 const signOut = createAction<void>("signOut");
+const register = createAsyncThunk(
+  "register",
+  async (payload: string, thunkAPI) => {
+    const username = payload;
+    const userDoc = { username: username };
+    await setDoc(doc(db, "users", username), userDoc);
+    return username;
+  }
+);
 
 const authSlice = createSlice({
   name: "auth",
@@ -42,13 +63,14 @@ const authSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addCase(signIn, (state, action) => {
-        state.username = action.payload;
-        state.signedIn = true;
-      })
       .addCase(signOut, (state, _) => {
         state.username = null;
         state.signedIn = false;
+      })
+      .addCase(signIn.fulfilled, (state, action) => {
+        const username = action.payload;
+        state.username = username;
+        state.signedIn = true;
       });
   },
 });
@@ -63,12 +85,12 @@ type State = ReturnType<typeof store.getState>;
 
 type NotSignedInParamList = {
   SignIn: undefined;
+  Register: undefined;
 };
 
 type SignInProps = NativeStackScreenProps<NotSignedInParamList, "SignIn">;
 const SignInScreen = ({ route, navigation }: SignInProps) => {
   const [username, setUsername] = useState("");
-  const state = useSelector((state: State) => state);
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -80,25 +102,63 @@ const SignInScreen = ({ route, navigation }: SignInProps) => {
       <Button
         title="Sign in"
         disabled={username === ""}
-        onPress={() => {
-          store.dispatch(signIn(username));
+        onPress={async () => {
+          try {
+            await store.dispatch(signIn(username)).unwrap();
+          } catch (e) {
+            setUsername("");
+          }
         }}
       />
     </View>
   );
 };
 
+type RegisterProps = NativeStackScreenProps<NotSignedInParamList, "Register">;
+const RegisterScreen = ({ route, navigation }: RegisterProps) => {
+  const [username, setUsername] = useState("");
+  const state = useSelector((state: State) => state);
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <Text>Register</Text>
+      <TextInput
+        value={username}
+        onChangeText={setUsername}
+        placeholder="Username"
+      />
+      <Button
+        title="Register"
+        disabled={username === ""}
+        onPress={async () => {
+          await store.dispatch(register(username));
+          navigation.navigate("SignIn");
+        }}
+      />
+    </View>
+  );
+};
+
+const NotSignedInTab = createBottomTabNavigator();
+
 const NotSignedInNavigator = () => {
   return (
-    <Stack.Navigator initialRouteName="SignIn">
-      <Stack.Screen
+    <NotSignedInTab.Navigator initialRouteName="SignIn">
+      <NotSignedInTab.Screen
         name="SignIn"
         component={SignInScreen}
         options={{
           title: "Sign in",
         }}
       />
-    </Stack.Navigator>
+      <NotSignedInTab.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{
+          title: "Register",
+        }}
+      />
+    </NotSignedInTab.Navigator>
   );
 };
 
@@ -114,9 +174,17 @@ const HomeScreen = ({ route, navigation }: HomeProps) => {
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
       <Text>Home</Text>
       <Text>Username: {username} </Text>
+      <Button
+        title="Sign out"
+        onPress={() => {
+          store.dispatch(signOut());
+        }}
+      />
     </View>
   );
 };
+
+const Stack = createNativeStackNavigator();
 
 const SignedInNavigator = () => {
   return (
@@ -131,10 +199,10 @@ const SignedInNavigator = () => {
 };
 
 const Root = () => {
-  const auth = useSelector((state: State) => state.auth);
+  const signedIn = useSelector((state: State) => state.auth.signedIn);
   return (
     <NavigationContainer>
-      {auth.signedIn ? <SignedInNavigator /> : <NotSignedInNavigator />}
+      {signedIn ? <SignedInNavigator /> : <NotSignedInNavigator />}
     </NavigationContainer>
   );
 };
