@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Provider } from "react-redux";
 import { configureStore, createAsyncThunk } from "@reduxjs/toolkit";
@@ -10,9 +10,16 @@ import {
 } from "@react-navigation/native-stack";
 import { initializeApp, FirebaseOptions } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
-import { View, Text, Button, TextInput } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { View, Text, Button, TextInput, FlatList } from "react-native";
+import {
+  NavigationContainer,
+  NavigatorScreenParams,
+} from "@react-navigation/native";
+import { CompositeScreenProps } from "@react-navigation/core";
+import {
+  createBottomTabNavigator,
+  BottomTabScreenProps,
+} from "@react-navigation/bottom-tabs";
 import { LogBox } from "react-native";
 
 LogBox.ignoreLogs(["Setting a timer"]);
@@ -51,7 +58,7 @@ const register = createAsyncThunk(
   "register",
   async (payload: string, thunkAPI) => {
     const username = payload;
-    const userDoc = { username: username };
+    const userDoc = { username: username, joined: [], managed: [] };
     await setDoc(doc(db, "users", username), userDoc);
     return username;
   }
@@ -88,7 +95,33 @@ type NotSignedInParamList = {
   Register: undefined;
 };
 
-type SignInProps = NativeStackScreenProps<NotSignedInParamList, "SignIn">;
+type SignInProps = BottomTabScreenProps<NotSignedInParamList, "SignIn">;
+
+type RegisterProps = BottomTabScreenProps<NotSignedInParamList, "Register">;
+
+const NotSignedInTab = createBottomTabNavigator();
+
+const NotSignedInNavigator = () => {
+  return (
+    <NotSignedInTab.Navigator initialRouteName="SignIn">
+      <NotSignedInTab.Screen
+        name="SignIn"
+        component={SignInScreen}
+        options={{
+          title: "Sign in",
+        }}
+      />
+      <NotSignedInTab.Screen
+        name="Register"
+        component={RegisterScreen}
+        options={{
+          title: "Register",
+        }}
+      />
+    </NotSignedInTab.Navigator>
+  );
+};
+
 const SignInScreen = ({ route, navigation }: SignInProps) => {
   const [username, setUsername] = useState("");
 
@@ -114,14 +147,12 @@ const SignInScreen = ({ route, navigation }: SignInProps) => {
   );
 };
 
-type RegisterProps = NativeStackScreenProps<NotSignedInParamList, "Register">;
 const RegisterScreen = ({ route, navigation }: RegisterProps) => {
   const [username, setUsername] = useState("");
   const state = useSelector((state: State) => state);
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text>Register</Text>
       <TextInput
         value={username}
         onChangeText={setUsername}
@@ -139,40 +170,201 @@ const RegisterScreen = ({ route, navigation }: RegisterProps) => {
   );
 };
 
-const NotSignedInTab = createBottomTabNavigator();
+type SignedInParamList = {
+  Tabs: NavigatorScreenParams<SignedInTabsParamList>;
+  CreateProject: undefined;
+  JoinProject: undefined;
+};
 
-const NotSignedInNavigator = () => {
+type SignedInTabsParamList = {
+  Joined: undefined;
+  Managed: undefined;
+  Account: undefined;
+};
+
+type TabsProps = NativeStackScreenProps<SignedInParamList, "Tabs">;
+type CreateProjectProps = NativeStackScreenProps<
+  SignedInParamList,
+  "CreateProject"
+>;
+type JoinProjectProps = NativeStackScreenProps<
+  SignedInParamList,
+  "JoinProject"
+>;
+
+type JoinedProps = CompositeScreenProps<
+  BottomTabScreenProps<SignedInTabsParamList, "Joined">,
+  TabsProps
+>;
+type ManagedProps = CompositeScreenProps<
+  BottomTabScreenProps<SignedInTabsParamList, "Managed">,
+  TabsProps
+>;
+type AccountProps = CompositeScreenProps<
+  BottomTabScreenProps<SignedInTabsParamList, "Account">,
+  TabsProps
+>;
+
+const SignedInStackNav = createNativeStackNavigator();
+
+const SignedInNavigator = () => {
   return (
-    <NotSignedInTab.Navigator initialRouteName="SignIn">
-      <NotSignedInTab.Screen
-        name="SignIn"
-        component={SignInScreen}
-        options={{
-          title: "Sign in",
-        }}
+    <SignedInStackNav.Navigator
+      initialRouteName="Tabs"
+      screenOptions={{ headerShown: false }}
+    >
+      <SignedInStackNav.Screen
+        name="Tabs"
+        component={SignedInTabs}
+        options={{ title: "Tabs" }}
       />
-      <NotSignedInTab.Screen
-        name="Register"
-        component={RegisterScreen}
-        options={{
-          title: "Register",
-        }}
+      <SignedInStackNav.Screen
+        name="JoinProject"
+        component={JoinProjectScreen}
+        options={{ title: "Join a project" }}
       />
-    </NotSignedInTab.Navigator>
+      <SignedInStackNav.Screen
+        name="CreateProject"
+        component={CreateProjectScreen}
+        options={{ title: "Create a project" }}
+      />
+    </SignedInStackNav.Navigator>
   );
 };
 
-type SignedInParamList = {
-  Home: undefined;
+const SignedInTabNav = createBottomTabNavigator();
+
+type SignedInTabsProps = NativeStackScreenProps<SignedInParamList, "Tabs">;
+const SignedInTabs = ({ route, navigation }: SignedInTabsProps) => {
+  return (
+    <SignedInTabNav.Navigator initialRouteName="Joined">
+      <SignedInTabNav.Screen
+        name="Joined"
+        component={JoinedScreen}
+        options={{ title: "Joined projects" }}
+      />
+      <SignedInTabNav.Screen
+        name="Managed"
+        component={ManagedScreen}
+        options={{ title: "Managed projects" }}
+      />
+      <SignedInTabNav.Screen
+        name="Account"
+        component={AccountScreen}
+        options={{ title: "Account" }}
+      />
+    </SignedInTabNav.Navigator>
+  );
 };
 
-type HomeProps = NativeStackScreenProps<SignedInParamList, "Home">;
-const HomeScreen = ({ route, navigation }: HomeProps) => {
+const useForceUpdate = () => {
+  const [counter, setCounter] = useState(0);
+  const update = () => {
+    setCounter(counter + 1);
+  };
+  return [counter, update] as [number, () => void];
+};
+
+const JoinedScreen = ({ route, navigation }: JoinedProps) => {
+  const [updateCounter, forceUpdate] = useForceUpdate();
+  const username = useSelector((state: State) => state.auth.username);
+  const [joinedProjects, setJoinedProjects] = useState<any[]>([]);
+
+  const header = () => (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Button onPress={() => navigation.navigate("JoinProject")} title="Join" />
+      <Button onPress={forceUpdate} title="Refresh" />
+    </View>
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: header,
+    });
+  });
+
+  useEffect(() => {
+    (async () => {
+      const userRef = doc(db, "users", username!);
+      const userData: any = (await getDoc(userRef)).data();
+
+      const projects = [];
+      for (const projectRef of userData["joined"]) {
+        const data: any = (await getDoc(projectRef)).data();
+        projects.push(data["name"]);
+      }
+
+      setJoinedProjects(projects);
+    })();
+  }, [updateCounter]);
+
+  return (
+    <View>
+      <FlatList
+        data={joinedProjects}
+        renderItem={({ item }) => (
+          <Text style={{ margin: 10, fontSize: 32 }}>{item}</Text>
+        )}
+        keyExtractor={(name) => name}
+      />
+    </View>
+  );
+};
+
+const ManagedScreen = ({ route, navigation }: ManagedProps) => {
+  const [updateCounter, forceUpdate] = useForceUpdate();
+  const username = useSelector((state: State) => state.auth.username);
+  const [managedProjects, setManagedProjects] = useState<any[]>([]);
+
+  const header = () => (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Button
+        onPress={() => navigation.navigate("CreateProject")}
+        title="Create"
+      />
+      <Button onPress={forceUpdate} title="Refresh" />
+    </View>
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: header,
+    });
+  });
+
+  useEffect(() => {
+    (async () => {
+      const userRef = doc(db, "users", username!);
+      const userData: any = (await getDoc(userRef)).data();
+
+      const projects = [];
+      for (const projectRef of userData["managed"]) {
+        const data: any = (await getDoc(projectRef)).data();
+        projects.push(data["name"]);
+      }
+
+      setManagedProjects(projects);
+    })();
+  }, [updateCounter]);
+
+  return (
+    <View>
+      <FlatList
+        data={managedProjects}
+        renderItem={({ item }) => (
+          <Text style={{ margin: 10, fontSize: 32 }}>{item}</Text>
+        )}
+        keyExtractor={(name) => name}
+      />
+    </View>
+  );
+};
+
+const AccountScreen = ({ route, navigation }: AccountProps) => {
   const username = useSelector((state: State) => state.auth.username);
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <Text>Home</Text>
       <Text>Username: {username} </Text>
       <Button
         title="Sign out"
@@ -184,17 +376,132 @@ const HomeScreen = ({ route, navigation }: HomeProps) => {
   );
 };
 
-const Stack = createNativeStackNavigator();
+const JoinProjectStack = createNativeStackNavigator();
 
-const SignedInNavigator = () => {
+type JoinProjectParamList = {
+  JoinProjectInner: undefined;
+};
+
+type JoinProjectInnerProps = NativeStackScreenProps<
+  JoinProjectParamList,
+  "JoinProjectInner"
+>;
+
+const JoinProjectScreen = ({ route, navigation }: JoinProjectProps) => {
   return (
-    <Stack.Navigator initialRouteName="Home">
-      <Stack.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ title: "Home" }}
+    <JoinProjectStack.Navigator>
+      <JoinProjectStack.Screen
+        name="JoinProjectInner"
+        component={JoinProjectInnerScreen}
+        options={{ title: "Join a project" }}
       />
-    </Stack.Navigator>
+    </JoinProjectStack.Navigator>
+  );
+};
+
+const JoinProjectInnerScreen = ({
+  route,
+  navigation,
+}: JoinProjectInnerProps) => {
+  const username = useSelector((state: State) => state.auth.username);
+  const [name, setName] = useState("");
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <TextInput
+        value={name}
+        onChangeText={setName}
+        placeholder="Project name"
+      />
+      <Button
+        title="Join"
+        disabled={name === ""}
+        onPress={async () => {
+          const projectRef = doc(db, "projects", name);
+          const userRef = doc(db, "users", username!);
+
+          const projectData: any = (await getDoc(projectRef)).data();
+          const currentMembers: typeof userRef[] = projectData["members"];
+          setDoc(
+            projectRef,
+            { members: currentMembers.concat(userRef) },
+            { merge: true }
+          );
+
+          const userData: any = (await getDoc(userRef)).data();
+          const currentJoined: typeof projectRef[] = userData["joined"];
+          setDoc(
+            userRef,
+            { joined: currentJoined.concat(projectRef) },
+            { merge: true }
+          );
+
+          navigation.goBack();
+        }}
+      />
+    </View>
+  );
+};
+
+const CreateProjectStack = createNativeStackNavigator();
+
+type CreateProjectParamList = {
+  CreateProjectInner: undefined;
+};
+
+type CreateProjectInnerProps = NativeStackScreenProps<
+  CreateProjectParamList,
+  "CreateProjectInner"
+>;
+
+const CreateProjectScreen = ({ route, navigation }: JoinProjectProps) => {
+  return (
+    <CreateProjectStack.Navigator>
+      <CreateProjectStack.Screen
+        name="CreateProjectInner"
+        component={CreateProjectInnerScreen}
+        options={{ title: "Create a project" }}
+      />
+    </CreateProjectStack.Navigator>
+  );
+};
+
+const CreateProjectInnerScreen = ({
+  route,
+  navigation,
+}: CreateProjectInnerProps) => {
+  const username = useSelector((state: State) => state.auth.username);
+  const [name, setName] = useState("");
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <TextInput
+        value={name}
+        onChangeText={setName}
+        placeholder="Project name"
+      />
+      <Button
+        title="Create"
+        disabled={name === ""}
+        onPress={async () => {
+          const projectRef = doc(db, "projects", name);
+          const userRef = doc(db, "users", username!);
+
+          const projectData = { name: name, members: [], admins: [userRef] };
+          setDoc(projectRef, projectData);
+
+          const userData: any = (await getDoc(userRef)).data();
+          const currentManaged: typeof projectRef[] = userData["managed"];
+          setDoc(
+            userRef,
+            { managed: currentManaged.concat(projectRef) },
+            { merge: true }
+          );
+
+          navigation.goBack();
+        }}
+      />
+    </View>
   );
 };
 
