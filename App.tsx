@@ -29,6 +29,7 @@ import {
 } from "@react-navigation/bottom-tabs";
 import { LogBox } from "react-native";
 import { ListItem } from "react-native-elements";
+import Swiper from "react-native-swiper";
 
 LogBox.ignoreLogs(["Setting a timer"]);
 
@@ -66,7 +67,7 @@ const register = createAsyncThunk(
   "register",
   async (payload: string, thunkAPI) => {
     const username = payload;
-    const userDoc = { username: username, joined: [], managed: [] };
+    const userDoc = { username: username, joined: [], managed: [], bio: "" };
     await setDoc(doc(db, "users", username), userDoc);
     return username;
   }
@@ -218,15 +219,12 @@ type ProjectParamList = {
 
 type AdminViewParamList = {
   Members: undefined;
-  Settings: undefined;
   Teams: undefined;
-  AllSkills: undefined;
 };
 
 type UserViewParamList = {
   Teams: undefined;
   Swipe: undefined;
-  Bio: undefined;
 };
 
 type TabsProps = NativeStackScreenProps<SignedInParamList, "Tabs">;
@@ -266,16 +264,8 @@ type AV_MembersProps = CompositeScreenProps<
   BottomTabScreenProps<AdminViewParamList, "Members">,
   AdminViewProps
 >;
-type AV_SettingsProps = CompositeScreenProps<
-  BottomTabScreenProps<AdminViewParamList, "Settings">,
-  AdminViewProps
->;
 type AV_TeamsProps = CompositeScreenProps<
   BottomTabScreenProps<AdminViewParamList, "Teams">,
-  AdminViewProps
->;
-type AV_AllSkillsProps = CompositeScreenProps<
-  BottomTabScreenProps<AdminViewParamList, "AllSkills">,
   AdminViewProps
 >;
 
@@ -285,10 +275,6 @@ type UV_TeamsProps = CompositeScreenProps<
 >;
 type UV_SwipeProps = CompositeScreenProps<
   BottomTabScreenProps<UserViewParamList, "Swipe">,
-  UserViewProps
->;
-type UV_BioProps = CompositeScreenProps<
-  BottomTabScreenProps<UserViewParamList, "Bio">,
   UserViewProps
 >;
 
@@ -511,11 +497,42 @@ const ManagedScreen = ({ route, navigation }: ManagedProps) => {
 };
 
 const AccountScreen = ({ route, navigation }: AccountProps) => {
-  const username = useSelector((state: State) => state.auth.username);
+  const [userData, forceUpdate] = useUserData();
+  const username: string | null = userData && userData["username"];
+  const [bio, setBio] = useState("");
+
+  const header = () => (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Button
+        onPress={async () => {
+          const ref = doc(db, "users", username!);
+          await setDoc(ref, { bio: bio }, { merge: true });
+        }}
+        title="Commit"
+      />
+    </View>
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: header,
+    });
+  });
+
+  useEffect(() => {
+    (async () => {
+      if (userData) {
+        setBio(userData["bio"]);
+      } else {
+        setBio("");
+      }
+    })();
+  }, [userData]);
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
       <Text>Username: {username} </Text>
+      <TextInput value={bio} onChangeText={setBio} placeholder="Bio" />
       <Button
         title="Sign out"
         onPress={() => {
@@ -686,37 +703,38 @@ const AdminViewScreen = ({ route, navigation }: AdminViewProps) => {
         options={{ title: "Project members" }}
       />
       <AdminViewTab.Screen
-        name="Settings"
-        component={AV_SettingsScreen}
-        options={{ title: "Settings" }}
-      />
-      <AdminViewTab.Screen
         name="Teams"
         component={AV_TeamsScreen}
         options={{ title: "Teams" }}
-      />
-      <AdminViewTab.Screen
-        name="AllSkills"
-        component={AV_AllSkillsScreen}
-        options={{ title: "All skills" }}
       />
     </AdminViewTab.Navigator>
   );
 };
 
 const AV_MembersScreen = ({ route, navigation }: AV_MembersProps) => {
-  return <View></View>;
-};
+  const [projectData, _] = useProjectData();
+  const members = projectData ? projectData["members"] : [];
 
-const AV_SettingsScreen = ({ route, navigation }: AV_SettingsProps) => {
-  return <View></View>;
+  const renderItem: ListRenderItem<string> = ({ item }) => (
+    <ListItem bottomDivider>
+      <ListItem.Content>
+        <Text>{item}</Text>
+      </ListItem.Content>
+    </ListItem>
+  );
+
+  return (
+    <View>
+      <FlatList
+        data={members}
+        renderItem={renderItem}
+        keyExtractor={(item) => item}
+      />
+    </View>
+  );
 };
 
 const AV_TeamsScreen = ({ route, navigation }: AV_TeamsProps) => {
-  return <View></View>;
-};
-
-const AV_AllSkillsScreen = ({ route, navigation }: AV_AllSkillsProps) => {
   return <View></View>;
 };
 
@@ -735,11 +753,6 @@ const UserViewScreen = ({ route, navigation }: UserViewProps) => {
         component={UV_SwipeScreen}
         options={{ headerShown: false }}
       />
-      <UserViewTab.Screen
-        name="Bio"
-        component={UV_BioScreen}
-        options={{ title: "Bio" }}
-      />
     </UserViewTab.Navigator>
   );
 };
@@ -749,11 +762,43 @@ const UV_TeamsScreen = ({ route, navigation }: UV_TeamsProps) => {
 };
 
 const UV_SwipeScreen = ({ route, navigation }: UV_SwipeProps) => {
-  return <View></View>;
-};
+  const [userData, forceUpdateU] = useUserData();
+  const username = userData && userData["username"];
+  const [projectData, forceUpdateP] = useProjectData();
+  const members =
+    projectData && projectData["members"].filter((x: string) => x !== username);
 
-const UV_BioScreen = ({ route, navigation }: UV_BioProps) => {
-  return <View></View>;
+  const [membersInfo, setMembersInfo] = useState<any[]>([]);
+  useEffect(() => {
+    (async () => {
+      if (members) {
+        const a = [];
+        for (const name of members) {
+          const fellowUserDoc = await getDoc(doc(db, "users", name));
+          const fellowUserData: any = fellowUserDoc.data();
+          a.push({ username: name, bio: fellowUserData["bio"] });
+        }
+        setMembersInfo(a);
+      } else {
+        setMembersInfo([]);
+      }
+    })();
+  }, [members]);
+
+  return (
+    <Swiper>
+      {membersInfo.map((info) => (
+        <View
+          testID={info.username}
+          key={info.username}
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <Text>Username: {info.username}</Text>
+          <Text>Bio: {info.bio}</Text>
+        </View>
+      ))}
+    </Swiper>
+  );
 };
 
 const Root = () => {
