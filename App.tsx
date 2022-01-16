@@ -10,7 +10,14 @@ import {
 } from "@react-navigation/native-stack";
 import { initializeApp, FirebaseOptions } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
-import { View, Text, Button, TextInput, FlatList } from "react-native";
+import {
+  View,
+  Text,
+  Button,
+  TextInput,
+  FlatList,
+  ListRenderItem,
+} from "react-native";
 import {
   NavigationContainer,
   NavigatorScreenParams,
@@ -21,6 +28,7 @@ import {
   BottomTabScreenProps,
 } from "@react-navigation/bottom-tabs";
 import { LogBox } from "react-native";
+import { ListItem } from "react-native-elements";
 
 LogBox.ignoreLogs(["Setting a timer"]);
 
@@ -82,9 +90,28 @@ const authSlice = createSlice({
   },
 });
 
+const setCurProject = createAction<string>("setCurProject");
+
+interface ProjectState {
+  curProject: string | null;
+}
+
+const projectSlice = createSlice({
+  name: "project",
+  initialState: { curProject: null } as ProjectState,
+  reducers: {},
+  extraReducers: (builder) => {
+    builder.addCase(setCurProject, (state, action) => {
+      const project = action.payload;
+      state.curProject = project;
+    });
+  },
+});
+
 const store = configureStore({
   reducer: {
     auth: authSlice.reducer,
+    project: projectSlice.reducer,
   },
   devTools: true,
 });
@@ -162,6 +189,7 @@ const RegisterScreen = ({ route, navigation }: RegisterProps) => {
         title="Register"
         disabled={username === ""}
         onPress={async () => {
+          setUsername("");
           await store.dispatch(register(username));
           navigation.navigate("SignIn");
         }}
@@ -174,12 +202,31 @@ type SignedInParamList = {
   Tabs: NavigatorScreenParams<SignedInTabsParamList>;
   CreateProject: undefined;
   JoinProject: undefined;
+  Project: NavigatorScreenParams<ProjectParamList>;
 };
 
 type SignedInTabsParamList = {
   Joined: undefined;
   Managed: undefined;
   Account: undefined;
+};
+
+type ProjectParamList = {
+  AdminView: NavigatorScreenParams<AdminViewParamList>;
+  UserView: NavigatorScreenParams<UserViewParamList>;
+};
+
+type AdminViewParamList = {
+  Members: undefined;
+  Settings: undefined;
+  Teams: undefined;
+  AllSkills: undefined;
+};
+
+type UserViewParamList = {
+  Teams: undefined;
+  Swipe: undefined;
+  Bio: undefined;
 };
 
 type TabsProps = NativeStackScreenProps<SignedInParamList, "Tabs">;
@@ -191,6 +238,7 @@ type JoinProjectProps = NativeStackScreenProps<
   SignedInParamList,
   "JoinProject"
 >;
+type ProjectProps = NativeStackScreenProps<SignedInParamList, "Project">;
 
 type JoinedProps = CompositeScreenProps<
   BottomTabScreenProps<SignedInTabsParamList, "Joined">,
@@ -203,6 +251,45 @@ type ManagedProps = CompositeScreenProps<
 type AccountProps = CompositeScreenProps<
   BottomTabScreenProps<SignedInTabsParamList, "Account">,
   TabsProps
+>;
+
+type AdminViewProps = CompositeScreenProps<
+  NativeStackScreenProps<ProjectParamList, "AdminView">,
+  ProjectProps
+>;
+type UserViewProps = CompositeScreenProps<
+  NativeStackScreenProps<ProjectParamList, "UserView">,
+  ProjectProps
+>;
+
+type AV_MembersProps = CompositeScreenProps<
+  BottomTabScreenProps<AdminViewParamList, "Members">,
+  AdminViewProps
+>;
+type AV_SettingsProps = CompositeScreenProps<
+  BottomTabScreenProps<AdminViewParamList, "Settings">,
+  AdminViewProps
+>;
+type AV_TeamsProps = CompositeScreenProps<
+  BottomTabScreenProps<AdminViewParamList, "Teams">,
+  AdminViewProps
+>;
+type AV_AllSkillsProps = CompositeScreenProps<
+  BottomTabScreenProps<AdminViewParamList, "AllSkills">,
+  AdminViewProps
+>;
+
+type UV_TeamsProps = CompositeScreenProps<
+  BottomTabScreenProps<UserViewParamList, "Teams">,
+  UserViewProps
+>;
+type UV_SwipeProps = CompositeScreenProps<
+  BottomTabScreenProps<UserViewParamList, "Swipe">,
+  UserViewProps
+>;
+type UV_BioProps = CompositeScreenProps<
+  BottomTabScreenProps<UserViewParamList, "Bio">,
+  UserViewProps
 >;
 
 const SignedInStackNav = createNativeStackNavigator();
@@ -227,6 +314,11 @@ const SignedInNavigator = () => {
         name="CreateProject"
         component={CreateProjectScreen}
         options={{ title: "Create a project" }}
+      />
+      <SignedInStackNav.Screen
+        name="Project"
+        component={ProjectScreen}
+        options={{ title: "Project" }}
       />
     </SignedInStackNav.Navigator>
   );
@@ -265,9 +357,40 @@ const useForceUpdate = () => {
   return [counter, update] as [number, () => void];
 };
 
-const JoinedScreen = ({ route, navigation }: JoinedProps) => {
-  const [updateCounter, forceUpdate] = useForceUpdate();
+const useUserData = () => {
+  const [updateValue, forceUpdate] = useForceUpdate();
   const username = useSelector((state: State) => state.auth.username);
+  const [userData, setUserData] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      const ref = doc(db, "users", username!);
+      const userDoc = await getDoc(ref);
+      setUserData(userDoc.data());
+    })();
+  }, [username, updateValue]);
+
+  return [userData, forceUpdate];
+};
+
+const useProjectData = () => {
+  const [updateValue, forceUpdate] = useForceUpdate();
+  const curProject = useSelector((state: State) => state.project.curProject);
+  const [projectData, setProjectData] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      const ref = doc(db, "projects", curProject!);
+      const projectDoc = await getDoc(ref);
+      setProjectData(projectDoc.data());
+    })();
+  }, [curProject, updateValue]);
+
+  return [projectData, forceUpdate];
+};
+
+const JoinedScreen = ({ route, navigation }: JoinedProps) => {
+  const [userData, forceUpdate] = useUserData();
   const [joinedProjects, setJoinedProjects] = useState<any[]>([]);
 
   const header = () => (
@@ -285,26 +408,40 @@ const JoinedScreen = ({ route, navigation }: JoinedProps) => {
 
   useEffect(() => {
     (async () => {
-      const userRef = doc(db, "users", username!);
-      const userData: any = (await getDoc(userRef)).data();
-
-      const projects = [];
-      for (const projectRef of userData["joined"]) {
-        const data: any = (await getDoc(projectRef)).data();
-        projects.push(data["name"]);
+      if (userData) {
+        const projects: any[] = [];
+        for (const name of userData["joined"]) {
+          const ref = doc(db, "projects", name);
+          const projectData: any = (await getDoc(ref)).data();
+          projects.push(projectData["name"]);
+        }
+        setJoinedProjects(projects);
+      } else {
+        setJoinedProjects([]);
       }
-
-      setJoinedProjects(projects);
     })();
-  }, [updateCounter]);
+  }, [userData]);
+
+  const renderItem: ListRenderItem<string> = ({ item }) => (
+    <ListItem
+      bottomDivider
+      onPress={() => {
+        store.dispatch(setCurProject(item));
+        navigation.navigate("Project");
+      }}
+    >
+      <ListItem.Content>
+        <Text>{item}</Text>
+      </ListItem.Content>
+      <ListItem.Chevron />
+    </ListItem>
+  );
 
   return (
     <View>
       <FlatList
         data={joinedProjects}
-        renderItem={({ item }) => (
-          <Text style={{ margin: 10, fontSize: 32 }}>{item}</Text>
-        )}
+        renderItem={renderItem}
         keyExtractor={(name) => name}
       />
     </View>
@@ -312,8 +449,7 @@ const JoinedScreen = ({ route, navigation }: JoinedProps) => {
 };
 
 const ManagedScreen = ({ route, navigation }: ManagedProps) => {
-  const [updateCounter, forceUpdate] = useForceUpdate();
-  const username = useSelector((state: State) => state.auth.username);
+  const [userData, forceUpdate] = useUserData();
   const [managedProjects, setManagedProjects] = useState<any[]>([]);
 
   const header = () => (
@@ -334,26 +470,40 @@ const ManagedScreen = ({ route, navigation }: ManagedProps) => {
 
   useEffect(() => {
     (async () => {
-      const userRef = doc(db, "users", username!);
-      const userData: any = (await getDoc(userRef)).data();
-
-      const projects = [];
-      for (const projectRef of userData["managed"]) {
-        const data: any = (await getDoc(projectRef)).data();
-        projects.push(data["name"]);
+      if (userData) {
+        const projects: any[] = [];
+        for (const name of userData["managed"]) {
+          const ref = doc(db, "projects", name);
+          const projectData: any = (await getDoc(ref)).data();
+          projects.push(projectData["name"]);
+        }
+        setManagedProjects(projects);
+      } else {
+        setManagedProjects([]);
       }
-
-      setManagedProjects(projects);
     })();
-  }, [updateCounter]);
+  }, [userData]);
+
+  const renderItem: ListRenderItem<string> = ({ item }) => (
+    <ListItem
+      bottomDivider
+      onPress={() => {
+        store.dispatch(setCurProject(item));
+        navigation.navigate("Project");
+      }}
+    >
+      <ListItem.Content>
+        <Text>{item}</Text>
+      </ListItem.Content>
+      <ListItem.Chevron />
+    </ListItem>
+  );
 
   return (
     <View>
       <FlatList
         data={managedProjects}
-        renderItem={({ item }) => (
-          <Text style={{ margin: 10, fontSize: 32 }}>{item}</Text>
-        )}
+        renderItem={renderItem}
         keyExtractor={(name) => name}
       />
     </View>
@@ -421,18 +571,18 @@ const JoinProjectInnerScreen = ({
           const userRef = doc(db, "users", username!);
 
           const projectData: any = (await getDoc(projectRef)).data();
-          const currentMembers: typeof userRef[] = projectData["members"];
+          const currentMembers: string[] = projectData["members"];
           setDoc(
             projectRef,
-            { members: currentMembers.concat(userRef) },
+            { members: currentMembers.concat(username!) },
             { merge: true }
           );
 
           const userData: any = (await getDoc(userRef)).data();
-          const currentJoined: typeof projectRef[] = userData["joined"];
+          const currentJoined: string[] = userData["joined"];
           setDoc(
             userRef,
-            { joined: currentJoined.concat(projectRef) },
+            { joined: currentJoined.concat(name) },
             { merge: true }
           );
 
@@ -454,7 +604,7 @@ type CreateProjectInnerProps = NativeStackScreenProps<
   "CreateProjectInner"
 >;
 
-const CreateProjectScreen = ({ route, navigation }: JoinProjectProps) => {
+const CreateProjectScreen = ({ route, navigation }: CreateProjectProps) => {
   return (
     <CreateProjectStack.Navigator>
       <CreateProjectStack.Screen
@@ -487,14 +637,14 @@ const CreateProjectInnerScreen = ({
           const projectRef = doc(db, "projects", name);
           const userRef = doc(db, "users", username!);
 
-          const projectData = { name: name, members: [], admins: [userRef] };
+          const projectData = { name: name, members: [], admin: username! };
           setDoc(projectRef, projectData);
 
           const userData: any = (await getDoc(userRef)).data();
-          const currentManaged: typeof projectRef[] = userData["managed"];
+          const currentManaged: string[] = userData["managed"];
           setDoc(
             userRef,
-            { managed: currentManaged.concat(projectRef) },
+            { managed: currentManaged.concat(name) },
             { merge: true }
           );
 
@@ -503,6 +653,107 @@ const CreateProjectInnerScreen = ({
       />
     </View>
   );
+};
+
+const ProjectScreenNav = createNativeStackNavigator();
+
+const ProjectScreen = ({ route, navigation }: ProjectProps) => {
+  const [projectData, _] = useProjectData();
+  const username = useSelector((state: State) => state.auth.username);
+  const isAdmin = projectData && projectData["admin"] === username!;
+
+  return projectData ? (
+    <ProjectScreenNav.Navigator screenOptions={{ headerShown: false }}>
+      {isAdmin ? (
+        <ProjectScreenNav.Screen name="AdminView" component={AdminViewScreen} />
+      ) : (
+        <ProjectScreenNav.Screen name="UserView" component={UserViewScreen} />
+      )}
+    </ProjectScreenNav.Navigator>
+  ) : (
+    <View></View>
+  );
+};
+
+const AdminViewTab = createBottomTabNavigator();
+
+const AdminViewScreen = ({ route, navigation }: AdminViewProps) => {
+  return (
+    <AdminViewTab.Navigator>
+      <AdminViewTab.Screen
+        name="Members"
+        component={AV_MembersScreen}
+        options={{ title: "Project members" }}
+      />
+      <AdminViewTab.Screen
+        name="Settings"
+        component={AV_SettingsScreen}
+        options={{ title: "Settings" }}
+      />
+      <AdminViewTab.Screen
+        name="Teams"
+        component={AV_TeamsScreen}
+        options={{ title: "Teams" }}
+      />
+      <AdminViewTab.Screen
+        name="AllSkills"
+        component={AV_AllSkillsScreen}
+        options={{ title: "All skills" }}
+      />
+    </AdminViewTab.Navigator>
+  );
+};
+
+const AV_MembersScreen = ({ route, navigation }: AV_MembersProps) => {
+  return <View></View>;
+};
+
+const AV_SettingsScreen = ({ route, navigation }: AV_SettingsProps) => {
+  return <View></View>;
+};
+
+const AV_TeamsScreen = ({ route, navigation }: AV_TeamsProps) => {
+  return <View></View>;
+};
+
+const AV_AllSkillsScreen = ({ route, navigation }: AV_AllSkillsProps) => {
+  return <View></View>;
+};
+
+const UserViewTab = createBottomTabNavigator();
+
+const UserViewScreen = ({ route, navigation }: UserViewProps) => {
+  return (
+    <UserViewTab.Navigator>
+      <UserViewTab.Screen
+        name="Teams"
+        component={UV_TeamsScreen}
+        options={{ title: "Teams" }}
+      />
+      <UserViewTab.Screen
+        name="Swipe"
+        component={UV_SwipeScreen}
+        options={{ headerShown: false }}
+      />
+      <UserViewTab.Screen
+        name="Bio"
+        component={UV_BioScreen}
+        options={{ title: "Bio" }}
+      />
+    </UserViewTab.Navigator>
+  );
+};
+
+const UV_TeamsScreen = ({ route, navigation }: UV_TeamsProps) => {
+  return <View></View>;
+};
+
+const UV_SwipeScreen = ({ route, navigation }: UV_SwipeProps) => {
+  return <View></View>;
+};
+
+const UV_BioScreen = ({ route, navigation }: UV_BioProps) => {
+  return <View></View>;
 };
 
 const Root = () => {
