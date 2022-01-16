@@ -9,7 +9,14 @@ import {
   createNativeStackNavigator,
 } from "@react-navigation/native-stack";
 import { initializeApp, FirebaseOptions } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  getDocs,
+  collection,
+} from "firebase/firestore";
 import {
   View,
   Text,
@@ -29,7 +36,7 @@ import {
 } from "@react-navigation/bottom-tabs";
 import { LogBox } from "react-native";
 import { ListItem } from "react-native-elements";
-import Swiper from "react-native-swiper";
+import Swiper from "react-native-deck-swiper";
 
 LogBox.ignoreLogs(["Setting a timer"]);
 
@@ -92,20 +99,27 @@ const authSlice = createSlice({
 });
 
 const setCurProject = createAction<string>("setCurProject");
+const setSelTeam = createAction<string>("setSelTeam");
 
 interface ProjectState {
   curProject: string | null;
+  selTeam: string | null;
 }
 
 const projectSlice = createSlice({
   name: "project",
-  initialState: { curProject: null } as ProjectState,
+  initialState: { curProject: null, selTeam: null } as ProjectState,
   reducers: {},
   extraReducers: (builder) => {
-    builder.addCase(setCurProject, (state, action) => {
-      const project = action.payload;
-      state.curProject = project;
-    });
+    builder
+      .addCase(setCurProject, (state, action) => {
+        const project = action.payload;
+        state.curProject = project;
+      })
+      .addCase(setSelTeam, (state, action) => {
+        const team = action.payload;
+        state.selTeam = team;
+      });
   },
 });
 
@@ -218,13 +232,22 @@ type ProjectParamList = {
 };
 
 type AdminViewParamList = {
+  AV_Tabs: NavigatorScreenParams<AV_TabsParamList>;
+  CreateTeam: undefined;
+  AV_Team: undefined;
+  AddSkill: undefined;
+};
+
+type AV_TabsParamList = {
   Members: undefined;
   Teams: undefined;
+  AllSkills: undefined;
 };
 
 type UserViewParamList = {
-  Teams: undefined;
+  Team: undefined;
   Swipe: undefined;
+  Skills: undefined;
 };
 
 type TabsProps = NativeStackScreenProps<SignedInParamList, "Tabs">;
@@ -260,21 +283,46 @@ type UserViewProps = CompositeScreenProps<
   ProjectProps
 >;
 
-type AV_MembersProps = CompositeScreenProps<
-  BottomTabScreenProps<AdminViewParamList, "Members">,
+type AV_TabsProps = CompositeScreenProps<
+  NativeStackScreenProps<AdminViewParamList, "AV_Tabs">,
   AdminViewProps
 >;
-type AV_TeamsProps = CompositeScreenProps<
-  BottomTabScreenProps<AdminViewParamList, "Teams">,
+type CreateTeamProps = CompositeScreenProps<
+  NativeStackScreenProps<AdminViewParamList, "CreateTeam">,
+  AdminViewProps
+>;
+type AV_TeamProps = CompositeScreenProps<
+  NativeStackScreenProps<AdminViewParamList, "AV_Team">,
+  AdminViewProps
+>;
+type AddSkillProps = CompositeScreenProps<
+  NativeStackScreenProps<AdminViewParamList, "AddSkill">,
   AdminViewProps
 >;
 
-type UV_TeamsProps = CompositeScreenProps<
-  BottomTabScreenProps<UserViewParamList, "Teams">,
+type AV_MembersProps = CompositeScreenProps<
+  BottomTabScreenProps<AV_TabsParamList, "Members">,
+  AV_TabsProps
+>;
+type AV_TeamsProps = CompositeScreenProps<
+  BottomTabScreenProps<AV_TabsParamList, "Teams">,
+  AV_TabsProps
+>;
+type AV_AllSkillsProps = CompositeScreenProps<
+  BottomTabScreenProps<AV_TabsParamList, "AllSkills">,
+  AV_TabsProps
+>;
+
+type UV_TeamProps = CompositeScreenProps<
+  BottomTabScreenProps<UserViewParamList, "Skills">,
   UserViewProps
 >;
 type UV_SwipeProps = CompositeScreenProps<
   BottomTabScreenProps<UserViewParamList, "Swipe">,
+  UserViewProps
+>;
+type UV_SkillsProps = CompositeScreenProps<
+  BottomTabScreenProps<UserViewParamList, "Skills">,
   UserViewProps
 >;
 
@@ -356,6 +404,7 @@ const useUserData = () => {
     })();
   }, [username, updateValue]);
 
+  console.log(userData);
   return [userData, forceUpdate];
 };
 
@@ -372,6 +421,7 @@ const useProjectData = () => {
     })();
   }, [curProject, updateValue]);
 
+  console.log(projectData);
   return [projectData, forceUpdate];
 };
 
@@ -589,7 +639,7 @@ const JoinProjectInnerScreen = ({
 
           const projectData: any = (await getDoc(projectRef)).data();
           const currentMembers: string[] = projectData["members"];
-          setDoc(
+          await setDoc(
             projectRef,
             { members: currentMembers.concat(username!) },
             { merge: true }
@@ -597,7 +647,7 @@ const JoinProjectInnerScreen = ({
 
           const userData: any = (await getDoc(userRef)).data();
           const currentJoined: string[] = userData["joined"];
-          setDoc(
+          await setDoc(
             userRef,
             { joined: currentJoined.concat(name) },
             { merge: true }
@@ -654,12 +704,17 @@ const CreateProjectInnerScreen = ({
           const projectRef = doc(db, "projects", name);
           const userRef = doc(db, "users", username!);
 
-          const projectData = { name: name, members: [], admin: username! };
-          setDoc(projectRef, projectData);
+          const projectData = {
+            name: name,
+            members: [],
+            skills: [],
+            admin: username!,
+          };
+          await setDoc(projectRef, projectData);
 
           const userData: any = (await getDoc(userRef)).data();
           const currentManaged: string[] = userData["managed"];
-          setDoc(
+          await setDoc(
             userRef,
             { managed: currentManaged.concat(name) },
             { merge: true }
@@ -692,9 +747,22 @@ const ProjectScreen = ({ route, navigation }: ProjectProps) => {
   );
 };
 
-const AdminViewTab = createBottomTabNavigator();
+const AdminViewNav = createNativeStackNavigator();
 
 const AdminViewScreen = ({ route, navigation }: AdminViewProps) => {
+  return (
+    <AdminViewNav.Navigator screenOptions={{ headerShown: false }}>
+      <AdminViewNav.Screen name="AV_Tabs" component={AV_TabsScreen} />
+      <AdminViewNav.Screen name="CreateTeam" component={CreateTeamScreen} />
+      <AdminViewNav.Screen name="AV_Team" component={AV_TeamScreen} />
+      <AdminViewNav.Screen name="AddSkill" component={AddSkillScreen} />
+    </AdminViewNav.Navigator>
+  );
+};
+
+const AdminViewTab = createBottomTabNavigator();
+
+const AV_TabsScreen = ({ route, navigation }: AV_TabsProps) => {
   return (
     <AdminViewTab.Navigator>
       <AdminViewTab.Screen
@@ -706,6 +774,11 @@ const AdminViewScreen = ({ route, navigation }: AdminViewProps) => {
         name="Teams"
         component={AV_TeamsScreen}
         options={{ title: "Teams" }}
+      />
+      <AdminViewTab.Screen
+        name="AllSkills"
+        component={AV_AllSkillsScreen}
+        options={{ title: "All skills" }}
       />
     </AdminViewTab.Navigator>
   );
@@ -735,7 +808,242 @@ const AV_MembersScreen = ({ route, navigation }: AV_MembersProps) => {
 };
 
 const AV_TeamsScreen = ({ route, navigation }: AV_TeamsProps) => {
+  const [projectData, forceUpdate] = useProjectData();
+  const projectName = projectData && projectData["name"];
+  const [teams, setTeams] = useState<any[]>([]);
+
+  const header = () => (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Button
+        onPress={() => navigation.navigate("CreateTeam")}
+        title="Create"
+      />
+      <Button onPress={forceUpdate} title="Refresh" />
+    </View>
+  );
+
+  useLayoutEffect(() =>
+    navigation.setOptions({
+      headerRight: header,
+    })
+  );
+
+  useEffect(() => {
+    (async () => {
+      if (projectData) {
+        const ref = collection(db, "projects", projectName, "teams");
+        const res = await getDocs(ref);
+        const teams_ = res.docs.map((doc) => doc.data()["name"]);
+        setTeams(teams_);
+      } else {
+        setTeams([]);
+      }
+    })();
+  }, [projectData]);
+
+  const renderItem: ListRenderItem<string> = ({ item }) => (
+    <ListItem
+      bottomDivider
+      onPress={() => {
+        store.dispatch(setSelTeam(item));
+        navigation.navigate("AV_Team");
+      }}
+    >
+      <ListItem.Content>
+        <Text>{item}</Text>
+      </ListItem.Content>
+    </ListItem>
+  );
+
+  return (
+    <View>
+      <FlatList
+        data={teams}
+        renderItem={renderItem}
+        keyExtractor={(name) => name}
+      />
+    </View>
+  );
+};
+
+const AV_AllSkillsScreen = ({ route, navigation }: AV_AllSkillsProps) => {
+  const [projectData, forceUpdate] = useProjectData();
+  const [skills, setSkills] = useState<any[]>([]);
+
+  const header = () => (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Button onPress={() => navigation.navigate("AddSkill")} title="Add" />
+      <Button onPress={forceUpdate} title="Refresh" />
+    </View>
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: header,
+    });
+  });
+
+  useEffect(() => {
+    if (projectData) {
+      setSkills(projectData["skills"]);
+    } else {
+      setSkills([]);
+    }
+  }, [projectData]);
+
+  const renderItem: ListRenderItem<string> = ({ item }) => (
+    <ListItem bottomDivider>
+      <ListItem.Content>
+        <Text>{item}</Text>
+      </ListItem.Content>
+    </ListItem>
+  );
+
+  return (
+    <View>
+      <FlatList
+        data={skills}
+        renderItem={renderItem}
+        keyExtractor={(name) => name}
+      />
+    </View>
+  );
+};
+
+const CreateTeamNav = createNativeStackNavigator();
+
+type CreateTeamParamList = {
+  CreateTeamInner: undefined;
+};
+
+type CreateTeamInnerProps = NativeStackScreenProps<
+  CreateTeamParamList,
+  "CreateTeamInner"
+>;
+
+const CreateTeamScreen = ({ route, navigation }: CreateTeamProps) => {
+  return (
+    <CreateTeamNav.Navigator>
+      <CreateTeamNav.Screen
+        name="CreateTeamInner"
+        component={CreateTeamInnerScreen}
+        options={{ title: "Create a team" }}
+      />
+    </CreateTeamNav.Navigator>
+  );
+};
+
+const CreateTeamInnerScreen = ({ route, navigation }: CreateTeamInnerProps) => {
+  const projectName = useSelector((state: State) => state.project.curProject);
+  const [teamName, setTeamName] = useState("");
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <TextInput
+        value={teamName}
+        onChangeText={setTeamName}
+        placeholder="Team name"
+      />
+      <Button
+        title="Create"
+        disabled={teamName === ""}
+        onPress={async () => {
+          const ref = doc(db, "projects", projectName!, "teams", teamName);
+          const data = { name: teamName, members: [] };
+          await setDoc(ref, data);
+
+          navigation.goBack();
+        }}
+      />
+    </View>
+  );
+};
+
+const AV_TeamTab = createBottomTabNavigator();
+
+type AV_TeamParamList = {
+  AV_Team_Members: undefined;
+  AV_Team_Info: undefined;
+};
+
+type AV_Team_MembersProps = BottomTabScreenProps<
+  AV_TeamParamList,
+  "AV_Team_Members"
+>;
+type AV_Team_InfoProps = BottomTabScreenProps<AV_TeamParamList, "AV_Team_Info">;
+
+const AV_TeamScreen = ({ route, navigation }: AV_TeamProps) => {
+  return (
+    <AV_TeamTab.Navigator>
+      <AV_TeamTab.Screen
+        name="AV_Team_Members"
+        component={AV_Team_MembersScreen}
+        options={{ title: "Team members" }}
+      />
+      <AV_TeamTab.Screen
+        name="AV_Team_Info"
+        component={AV_Team_InfoScreen}
+        options={{ title: "Team info" }}
+      />
+    </AV_TeamTab.Navigator>
+  );
+};
+
+const AV_Team_MembersScreen = ({ route, navigation }: AV_Team_MembersProps) => {
   return <View></View>;
+};
+
+const AV_Team_InfoScreen = ({ route, navigation }: AV_Team_InfoProps) => {
+  return <View></View>;
+};
+
+const AddSkillStack = createNativeStackNavigator();
+
+type AddSkillParamList = {
+  AddSkillInner: undefined;
+};
+
+type AddSkillInnerProps = NativeStackScreenProps<
+  AddSkillParamList,
+  "AddSkillInner"
+>;
+
+const AddSkillScreen = ({ route, navigation }: AddSkillProps) => {
+  return (
+    <AddSkillStack.Navigator>
+      <AddSkillStack.Screen
+        name="AddSkillInner"
+        component={AddSkillInnerScreen}
+        options={{ title: "Add a skill" }}
+      />
+    </AddSkillStack.Navigator>
+  );
+};
+
+const AddSkillInnerScreen = ({ route, navigation }: AddSkillInnerProps) => {
+  const [name, setName] = useState("");
+  const [projectData, _] = useProjectData();
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <TextInput value={name} onChangeText={setName} placeholder="Skill name" />
+      <Button
+        title="Add"
+        disabled={name === ""}
+        onPress={async () => {
+          if (projectData) {
+            const projectName = projectData["name"];
+            const ref = doc(db, "projects", projectName);
+            const skills = projectData["skills"] as any[];
+
+            await setDoc(ref, { skills: skills.concat(name) }, { merge: true });
+
+            navigation.goBack();
+          }
+        }}
+      />
+    </View>
+  );
 };
 
 const UserViewTab = createBottomTabNavigator();
@@ -744,21 +1052,22 @@ const UserViewScreen = ({ route, navigation }: UserViewProps) => {
   return (
     <UserViewTab.Navigator>
       <UserViewTab.Screen
-        name="Teams"
-        component={UV_TeamsScreen}
-        options={{ title: "Teams" }}
+        name="Team"
+        component={UV_TeamScreen}
+        options={{ title: "Team" }}
       />
       <UserViewTab.Screen
         name="Swipe"
         component={UV_SwipeScreen}
         options={{ headerShown: false }}
       />
+      <UserViewTab.Screen
+        name="Skills"
+        component={UV_SkillsScreen}
+        options={{ title: "Skills" }}
+      />
     </UserViewTab.Navigator>
   );
-};
-
-const UV_TeamsScreen = ({ route, navigation }: UV_TeamsProps) => {
-  return <View></View>;
 };
 
 const UV_SwipeScreen = ({ route, navigation }: UV_SwipeProps) => {
@@ -783,21 +1092,90 @@ const UV_SwipeScreen = ({ route, navigation }: UV_SwipeProps) => {
         setMembersInfo([]);
       }
     })();
-  }, [members]);
+  }, [userData, projectData]);
+
+  const renderCard = (info: any) =>
+    info ? (
+      <View
+        testID={info.username}
+        key={info.username}
+        style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+      >
+        <Text>Username: {info.username}</Text>
+        <Text>Bio: {info.bio}</Text>
+      </View>
+    ) : (
+      <View />
+    );
+
+  console.log(membersInfo);
+  return (
+    <Swiper cards={membersInfo} renderCard={renderCard} verticalSwipe={false} />
+  );
+};
+
+const UV_TeamScreen = ({ route, navigation }: UV_TeamProps) => {
+  return <View></View>;
+};
+
+const UV_SkillsScreen = ({ route, navigation }: UV_SkillsProps) => {
+  const [projectData, forceUpdate] = useProjectData();
+  const [skills, setSkills] = useState<any[]>([]);
+  const [checked, setChecked] = useState<boolean[]>([]);
+  const [updateValue, forceUpdateV] = useForceUpdate();
+
+  const header = () => (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Button onPress={() => {}} title="Commit" />
+      <Button onPress={forceUpdate} title="Refresh" />
+    </View>
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: header,
+    });
+  });
+
+  useEffect(() => {
+    if (projectData) {
+      setSkills(projectData["skills"]);
+      const checked_ = [];
+      for (const skill of projectData["skills"]) {
+        checked_.push(false);
+      }
+      setChecked(checked_);
+    } else {
+      setSkills([]);
+      setChecked([]);
+    }
+  }, [projectData]);
+
+  const renderItem: ListRenderItem<string> = ({ item, index }) => (
+    <ListItem bottomDivider>
+      <ListItem.Content>
+        <Text>{item}</Text>
+      </ListItem.Content>
+      <ListItem.CheckBox
+        checked={checked[index]}
+        onPress={() => {
+          checked[index] = !checked[index];
+          setChecked(checked);
+          forceUpdateV();
+        }}
+      />
+    </ListItem>
+  );
 
   return (
-    <Swiper>
-      {membersInfo.map((info) => (
-        <View
-          testID={info.username}
-          key={info.username}
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
-        >
-          <Text>Username: {info.username}</Text>
-          <Text>Bio: {info.bio}</Text>
-        </View>
-      ))}
-    </Swiper>
+    <View>
+      <FlatList
+        data={skills}
+        renderItem={renderItem}
+        keyExtractor={(name) => name}
+        extraData={updateValue}
+      />
+    </View>
   );
 };
 
