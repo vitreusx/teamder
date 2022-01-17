@@ -445,13 +445,7 @@ const JoinedScreen = ({ route, navigation }: JoinedProps) => {
   useEffect(() => {
     (async () => {
       if (userData) {
-        const projects: any[] = [];
-        for (const name of userData["joined"]) {
-          const ref = doc(db, "projects", name);
-          const projectData: any = (await getDoc(ref)).data();
-          projects.push(projectData["name"]);
-        }
-        setJoinedProjects(projects);
+        setJoinedProjects(userData["joined"].map((data: any) => data["name"]));
       } else {
         setJoinedProjects([]);
       }
@@ -646,10 +640,11 @@ const JoinProjectInnerScreen = ({
           );
 
           const userData: any = (await getDoc(userRef)).data();
-          const currentJoined: string[] = userData["joined"];
+          const currentJoined: any[] = userData["joined"];
+          const data = { name: name, team: null };
           await setDoc(
             userRef,
-            { joined: currentJoined.concat(name) },
+            { joined: currentJoined.concat(data) },
             { merge: true }
           );
 
@@ -818,6 +813,7 @@ const AV_TeamsScreen = ({ route, navigation }: AV_TeamsProps) => {
         onPress={() => navigation.navigate("CreateTeam")}
         title="Create"
       />
+      <Button onPress={() => {}} title="Fill" />
       <Button onPress={forceUpdate} title="Refresh" />
     </View>
   );
@@ -936,6 +932,7 @@ const CreateTeamScreen = ({ route, navigation }: CreateTeamProps) => {
 const CreateTeamInnerScreen = ({ route, navigation }: CreateTeamInnerProps) => {
   const projectName = useSelector((state: State) => state.project.curProject);
   const [teamName, setTeamName] = useState("");
+  const [numMembers, setNumMembers] = useState("");
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -944,12 +941,21 @@ const CreateTeamInnerScreen = ({ route, navigation }: CreateTeamInnerProps) => {
         onChangeText={setTeamName}
         placeholder="Team name"
       />
+      <TextInput
+        value={numMembers}
+        onChangeText={setNumMembers}
+        placeholder="# of members"
+      />
       <Button
         title="Create"
-        disabled={teamName === ""}
+        disabled={teamName === "" || numMembers === ""}
         onPress={async () => {
           const ref = doc(db, "projects", projectName!, "teams", teamName);
-          const data = { name: teamName, members: [] };
+          const data = {
+            name: teamName,
+            numMembers: parseInt(numMembers),
+            members: [],
+          };
           await setDoc(ref, data);
 
           navigation.goBack();
@@ -989,8 +995,71 @@ const AV_TeamScreen = ({ route, navigation }: AV_TeamProps) => {
   );
 };
 
+const useTeamData = () => {
+  const [updateValue, forceUpdate] = useForceUpdate();
+  const curProject = useSelector((state: State) => state.project.curProject);
+  const selTeam = useSelector((state: State) => state.project.selTeam);
+  const [teamData, setTeamData] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (curProject && selTeam) {
+        const ref = doc(db, "projects", curProject!, "teams", selTeam!);
+        const teamDoc = await getDoc(ref);
+        setTeamData(teamDoc.data());
+      } else {
+        setTeamData(null);
+      }
+    })();
+  }, [curProject, selTeam, updateValue]);
+
+  console.log(teamData);
+  return [teamData, forceUpdate];
+};
+
 const AV_Team_MembersScreen = ({ route, navigation }: AV_Team_MembersProps) => {
-  return <View></View>;
+  const [teamData, forceUpdate] = useTeamData();
+  const [members, setMembers] = useState<string[]>([]);
+
+  const header = () => (
+    <View style={{ flex: 1, flexDirection: "row" }}>
+      <Button onPress={forceUpdate} title="Refresh" />
+    </View>
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: header,
+    });
+  });
+
+  useEffect(() => {
+    async () => {
+      if (teamData) {
+        setMembers(teamData["members"]);
+      } else {
+        setMembers([]);
+      }
+    };
+  }, [teamData]);
+
+  const renderItem: ListRenderItem<string> = ({ item }) => (
+    <ListItem bottomDivider>
+      <ListItem.Content>
+        <Text>{item}</Text>
+      </ListItem.Content>
+    </ListItem>
+  );
+
+  return (
+    <View>
+      <FlatList
+        data={members}
+        renderItem={renderItem}
+        keyExtractor={(name) => name}
+      />
+    </View>
+  );
 };
 
 const AV_Team_InfoScreen = ({ route, navigation }: AV_Team_InfoProps) => {
