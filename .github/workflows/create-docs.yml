@@ -30,7 +30,8 @@ jobs:
           cd teamder
           yarn install
           jq '.homepage="https://vitreusx.github.io/teamder/web"' package.json | sponge package.json
-          yarn expo build:web
+          yarn add expo-cli
+          expo build:web
 
       - name: Copy the Web version to a subdirectory of the docs build
         run: |
