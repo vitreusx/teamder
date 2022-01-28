@@ -5,9 +5,6 @@ on:
 jobs:
   create-docs:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./docs
     steps:
       - name: Checkout main branch
         uses: actions/checkout@v2
@@ -18,14 +15,18 @@ jobs:
           node-version: "16.13.2"
 
       - name: Install packages
-        run: yarn install
+        run: |
+          cd docs
+          yarn install
 
       - name: Build docs
-        run: yarn build
+        run: |
+          cd docs
+          yarn build
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.ref == 'refs/heads/main' }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build
+          publish_dir: ./docs/build
