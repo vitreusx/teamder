@@ -19,6 +19,11 @@ jobs:
           cd docs
           yarn install
 
+      - name: Set the homepage field to the Github Pages URL
+        run: |
+          cd docs
+          jq '.homepage="https://vitreusx.github.io/teamder/"' package.json | sponge package.json
+
       - name: Build docs
         run: |
           cd docs
