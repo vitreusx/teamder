@@ -38,6 +38,8 @@ import { LogBox } from "react-native";
 import { ListItem } from "react-native-elements";
 import Swiper from "react-native-deck-swiper";
 
+import * as serviceWorkerRegistration from "./src/serviceWorkerRegistration";
+
 LogBox.ignoreLogs(["Setting a timer"]);
 
 const firebaseConfig: FirebaseOptions = {
@@ -1268,3 +1270,8 @@ const App = () => {
 };
 
 export default App;
+
+// If you want your app to work offline and load faster, you can change
+// unregister() to register() below. Note this comes with some pitfalls.
+// Learn more about service workers: https://cra.link/PWA
+serviceWorkerRegistration.register();

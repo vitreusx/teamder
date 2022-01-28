@@ -14,21 +14,27 @@ jobs:
         with:
           node-version: "16.13.2"
 
-      - name: Install packages
+      - name: Install sponge
         run: |
-          cd docs
-          yarn install
-
-      - name: Set the homepage field to the Github Pages URL
-        run: |
-          cd docs
           sudo apt-get install moreutils
-          jq '.homepage="https://vitreusx.github.io/teamder/"' package.json | sponge package.json
 
       - name: Build docs
         run: |
           cd docs
+          yarn install
+          jq '.homepage="https://vitreusx.github.io/teamder/"' package.json | sponge package.json
           yarn build
+
+      - name: Build Web version of the app
+        run: |
+          cd teamder
+          yarn install
+          jq '.homepage="https://vitreusx.github.io/teamder/web"' package.json | sponge package.json
+          expo build:web
+
+      - name: Copy the Web version to a subdirectory of the docs build
+        run: |
+          cp -r teamder/web-build docs/build/web
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v3
