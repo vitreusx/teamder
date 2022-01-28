@@ -23,6 +23,7 @@ jobs:
         run: |
           cd docs
           jq '.homepage="https://vitreusx.github.io/teamder/"' package.json > package.json
+          cat package.json
 
       - name: Build docs
         run: |
