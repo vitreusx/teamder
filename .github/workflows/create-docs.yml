@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./app
+        working-directory: ./docs
     steps:
       - name: Checkout main branch
         uses: actions/checkout@v2
