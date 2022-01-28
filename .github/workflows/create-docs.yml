@@ -35,11 +35,11 @@ jobs:
 
       - name: Copy the Web version to a subdirectory of the docs build
         run: |
-          cp -r teamder/web-build docs/build/web
+          cp -r teamder/web-build docs/out/web
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v3
         if: ${{ github.ref == 'refs/heads/main' }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/build
+          publish_dir: ./docs/out
