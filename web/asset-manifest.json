@@ -1,0 +1,39 @@
+{
+  "files": {
+    "app.js": "/teamder/web/static/js/app.1c7aa6a1.chunk.js",
+    "app.js.map": "/teamder/web/static/js/app.1c7aa6a1.chunk.js.map",
+    "runtime~app.js": "/teamder/web/static/js/runtime~app.2df2bbff.js",
+    "runtime~app.js.map": "/teamder/web/static/js/runtime~app.2df2bbff.js.map",
+    "static/js/2.63a1c3fe.chunk.js": "/teamder/web/static/js/2.63a1c3fe.chunk.js",
+    "static/js/2.63a1c3fe.chunk.js.map": "/teamder/web/static/js/2.63a1c3fe.chunk.js.map",
+    "fonts/AntDesign.ttf": "/teamder/web/./fonts/AntDesign.ttf",
+    "fonts/Entypo.ttf": "/teamder/web/./fonts/Entypo.ttf",
+    "fonts/Feather.ttf": "/teamder/web/./fonts/Feather.ttf",
+    "fonts/FontAwesome.ttf": "/teamder/web/./fonts/FontAwesome.ttf",
+    "fonts/FontAwesome5_Brands.ttf": "/teamder/web/./fonts/FontAwesome5_Brands.ttf",
+    "fonts/FontAwesome5_Solid.ttf": "/teamder/web/./fonts/FontAwesome5_Solid.ttf",
+    "fonts/Fontisto.ttf": "/teamder/web/./fonts/Fontisto.ttf",
+    "fonts/Foundation.ttf": "/teamder/web/./fonts/Foundation.ttf",
+    "fonts/Ionicons.ttf": "/teamder/web/./fonts/Ionicons.ttf",
+    "fonts/MaterialCommunityIcons.ttf": "/teamder/web/./fonts/MaterialCommunityIcons.ttf",
+    "fonts/MaterialIcons.ttf": "/teamder/web/./fonts/MaterialIcons.ttf",
+    "fonts/SimpleLineIcons.ttf": "/teamder/web/./fonts/SimpleLineIcons.ttf",
+    "favicon-16.png": "/teamder/web/favicon-16.png",
+    "favicon-32.png": "/teamder/web/favicon-32.png",
+    "favicon.ico": "/teamder/web/favicon.ico",
+    "index.html": "/teamder/web/index.html",
+    "manifest.json": "/teamder/web/manifest.json",
+    "serve.json": "/teamder/web/serve.json",
+    "service-worker.js.map": "/teamder/web/service-worker.js.map",
+    "static/js/2.63a1c3fe.chunk.js.LICENSE.txt": "/teamder/web/static/js/2.63a1c3fe.chunk.js.LICENSE.txt",
+    "static/media/bell.png": "/teamder/web/static/media/bell.cf04af27.png",
+    "static/media/heart.png": "/teamder/web/static/media/heart.23b5c2c0.png",
+    "static/media/rocket.png": "/teamder/web/static/media/rocket.d2f3bf41.png",
+    "static/media/star.png": "/teamder/web/static/media/star.69c71386.png"
+  },
+  "entrypoints": [
+    "static/js/runtime~app.2df2bbff.js",
+    "static/js/2.63a1c3fe.chunk.js",
+    "static/js/app.1c7aa6a1.chunk.js"
+  ]
+}
